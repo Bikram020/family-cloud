@@ -15,7 +15,8 @@ const {
   deleteUser,
   setQuota,
   getUsers,
-  syncStorage
+  syncStorage,
+  getUserFilesAdmin
 } = require('../controllers/admin.controller');
 
 // All admin routes use both middlewares
@@ -35,5 +36,9 @@ router.get('/users', authenticate, isAdmin, getUsers);
 
 // POST /admin/sync-storage — Recalculate all storage from disk
 router.post('/sync-storage', authenticate, isAdmin, syncStorage);
+
+
+// GET /admin/user/:username/files — View a user's files (admin only)
+router.get('/user/:username/files', authenticate, isAdmin, getUserFilesAdmin);
 
 module.exports = router;

@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const { readUsers, writeUsers } = require('./auth.controller');
 const { deleteUserFolder, recalculateUsage } = require('../services/storage.service');
 const { getStorageSummary, syncAllUsage } = require('../services/quota.service');
+const { getUserStorageReport } = require('../services/file.service');
 
 // ============================================
 // POST /admin/create-user
@@ -218,10 +219,26 @@ const syncStorage = async (req, res) => {
   }
 };
 
+
+// GET /admin/user/:username/files
+// Returns detailed storage report for a specific user.
+const getUserFilesAdmin = async (req, res) => {
+  try {
+    const { username } = req.params;
+    const report = getUserStorageReport(username);
+    if (!report) return res.status(404).json({ error: "User not found" });
+    return res.status(200).json(report);
+  } catch (error) {
+    console.error("Get user files error:", error.message);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 module.exports = {
   createUser,
   deleteUser,
   setQuota,
   getUsers,
-  syncStorage
+  syncStorage,
+  getUserFilesAdmin
 };

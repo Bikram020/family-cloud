@@ -12,35 +12,28 @@ const fs = require('fs');
 const cors = require('cors');
 
 // --- Create the Express app ---
-// Think of this as creating a new "web server object"
-// that we'll configure with routes and middleware.
 const app = express();
 
 // --- Configuration ---
-// The port the server listens on. Default is 3000.
-// You could also set this via environment variable:
-//   PORT=4000 node src/server.js
 const PORT = process.env.PORT || 3000;
 
 // --- Built-in Middleware ---
 // These run on EVERY request before your route handlers.
 
-// CORS — allows the frontend (running on a different port/device)
-// to make API requests without being blocked by the browser.
+// CORS — allows the frontend to make API requests
 app.use(cors());
 
-// express.json() — parses incoming JSON request bodies.
-// When a client sends { "username": "mom", "password": "123" },
-// this middleware makes it available as req.body.username, req.body.password
+// Request Logger — logs every request for monitoring
+const { logger } = require('./middleware/logger.middleware');
+app.use(logger);
+
+// Parse JSON request bodies
 app.use(express.json());
 
-// express.urlencoded() — parses form-encoded data (like HTML form submissions).
-// extended: true allows nested objects in form data.
+// Parse form-encoded data
 app.use(express.urlencoded({ extended: true }));
 
 // --- Ensure storage directory exists ---
-// We need the storage/user-files directory to exist before
-// any uploads happen. This creates it if it doesn't exist.
 const storagePath = path.join(__dirname, '..', 'storage', 'user-files');
 if (!fs.existsSync(storagePath)) {
   fs.mkdirSync(storagePath, { recursive: true });
@@ -63,64 +56,59 @@ if (!fs.existsSync(usersFile)) {
 // ============================================
 // ROUTES
 // ============================================
-// Import route files.
-// Each route file handles a group of related endpoints.
 const authRoutes = require('./routes/auth.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const adminRoutes = require('./routes/admin.routes');
 const galleryRoutes = require('./routes/gallery.routes');
 
 // --- Mount routes ---
-// app.use('/auth', authRoutes) means:
-//   Any route defined in auth.routes.js will be prefixed with /auth
-//   So router.post('/login') becomes POST /auth/login
 app.use('/auth', authRoutes);
-
-// POST /upload → handles image uploads (requires login)
 app.use('/upload', uploadRoutes);
-
-// Admin routes → user management, quotas, storage (admin only)
 app.use('/admin', adminRoutes);
-
-// Gallery → view images for logged-in user
 app.use('/gallery', galleryRoutes);
-
-// File deletion → DELETE /file/:filename
 app.use('/file', galleryRoutes);
 
 // --- Static file serving ---
 // Serves uploaded images so the frontend can display them.
 // GET /files/mom/photo.jpg → serves storage/user-files/mom/photo.jpg
-// The authenticate middleware ensures only logged-in users can view files.
 const { authenticate } = require('./middleware/auth.middleware');
 app.use('/files', authenticate, express.static(storagePath));
 
 // --- Health Check ---
-// This is a simple endpoint to verify the server is running.
-// Hit GET http://100.x.x.x:3000/health to check.
-// Returns: { status: "ok", uptime: 123.45, timestamp: "..." }
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
-    uptime: process.uptime(),          // seconds since server started
-    timestamp: new Date().toISOString() // current server time
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
   });
 });
 
+// --- System Overview (admin) ---
+// GET /system — full system stats for the admin dashboard
+const { getSystemOverview } = require('./services/file.service');
+const { isAdmin } = require('./middleware/admin.middleware');
+
+app.get('/system', authenticate, isAdmin, (req, res) => {
+  const overview = getSystemOverview();
+  res.status(200).json(overview);
+});
+
 // --- Root route ---
-// A friendly message when someone visits the base URL.
 app.get('/', (req, res) => {
   res.status(200).json({
     message: '🌤️ Family Cloud Storage Server',
     version: '1.0.0',
     endpoints: {
       health: 'GET /health',
+      system: 'GET /system (admin)',
       login: 'POST /auth/login',
       upload: 'POST /upload',
       gallery: 'GET /gallery',
       deleteFile: 'DELETE /file/:filename',
+      files: 'GET /files/:username/:filename',
       admin: {
         users: 'GET /admin/users',
+        userFiles: 'GET /admin/user/:username/files',
         createUser: 'POST /admin/create-user',
         deleteUser: 'DELETE /admin/user/:username',
         setQuota: 'PATCH /admin/set-quota',
@@ -133,12 +121,6 @@ app.get('/', (req, res) => {
 // ============================================
 // START THE SERVER
 // ============================================
-// app.listen() tells Express to start accepting connections.
-// '0.0.0.0' means "listen on ALL network interfaces",
-// which is required for Tailscale to reach the server.
-// Without '0.0.0.0', it might only listen on localhost
-// and other devices couldn't connect.
-
 app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('===========================================');
