@@ -61,12 +61,16 @@ if (!fs.existsSync(usersFile)) {
 // Import route files.
 // Each route file handles a group of related endpoints.
 const authRoutes = require('./routes/auth.routes');
+const uploadRoutes = require('./routes/upload.routes');
 
 // --- Mount routes ---
 // app.use('/auth', authRoutes) means:
 //   Any route defined in auth.routes.js will be prefixed with /auth
 //   So router.post('/login') becomes POST /auth/login
 app.use('/auth', authRoutes);
+
+// POST /upload → handles image uploads (requires login)
+app.use('/upload', uploadRoutes);
 
 // --- Health Check ---
 // This is a simple endpoint to verify the server is running.
@@ -89,7 +93,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: 'GET /health',
       login: 'POST /auth/login',
-      upload: 'POST /upload              (coming in Step 4)',
+      upload: 'POST /upload',
       gallery: 'GET /gallery             (coming in Step 7)',
       admin: 'GET /admin/users           (coming in Step 6)'
     }
