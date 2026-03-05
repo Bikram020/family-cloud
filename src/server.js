@@ -9,6 +9,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const cors = require('cors');
 
 // --- Create the Express app ---
 // Think of this as creating a new "web server object"
@@ -23,6 +24,10 @@ const PORT = process.env.PORT || 3000;
 
 // --- Built-in Middleware ---
 // These run on EVERY request before your route handlers.
+
+// CORS — allows the frontend (running on a different port/device)
+// to make API requests without being blocked by the browser.
+app.use(cors());
 
 // express.json() — parses incoming JSON request bodies.
 // When a client sends { "username": "mom", "password": "123" },
@@ -62,6 +67,7 @@ if (!fs.existsSync(usersFile)) {
 // Each route file handles a group of related endpoints.
 const authRoutes = require('./routes/auth.routes');
 const uploadRoutes = require('./routes/upload.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 // --- Mount routes ---
 // app.use('/auth', authRoutes) means:
@@ -71,6 +77,16 @@ app.use('/auth', authRoutes);
 
 // POST /upload → handles image uploads (requires login)
 app.use('/upload', uploadRoutes);
+
+// Admin routes → user management, quotas, storage (admin only)
+app.use('/admin', adminRoutes);
+
+// --- Static file serving ---
+// Serves uploaded images so the frontend can display them.
+// GET /files/mom/photo.jpg → serves storage/user-files/mom/photo.jpg
+// The authenticate middleware ensures only logged-in users can view files.
+const { authenticate } = require('./middleware/auth.middleware');
+app.use('/files', authenticate, express.static(storagePath));
 
 // --- Health Check ---
 // This is a simple endpoint to verify the server is running.
@@ -95,7 +111,13 @@ app.get('/', (req, res) => {
       login: 'POST /auth/login',
       upload: 'POST /upload',
       gallery: 'GET /gallery             (coming in Step 7)',
-      admin: 'GET /admin/users           (coming in Step 6)'
+      admin: {
+        users: 'GET /admin/users',
+        createUser: 'POST /admin/create-user',
+        deleteUser: 'DELETE /admin/user/:username',
+        setQuota: 'PATCH /admin/set-quota',
+        syncStorage: 'POST /admin/sync-storage'
+      }
     }
   });
 });
