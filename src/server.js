@@ -68,6 +68,7 @@ if (!fs.existsSync(usersFile)) {
 const authRoutes = require('./routes/auth.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const adminRoutes = require('./routes/admin.routes');
+const galleryRoutes = require('./routes/gallery.routes');
 
 // --- Mount routes ---
 // app.use('/auth', authRoutes) means:
@@ -80,6 +81,12 @@ app.use('/upload', uploadRoutes);
 
 // Admin routes → user management, quotas, storage (admin only)
 app.use('/admin', adminRoutes);
+
+// Gallery → view images for logged-in user
+app.use('/gallery', galleryRoutes);
+
+// File deletion → DELETE /file/:filename
+app.use('/file', galleryRoutes);
 
 // --- Static file serving ---
 // Serves uploaded images so the frontend can display them.
@@ -110,7 +117,8 @@ app.get('/', (req, res) => {
       health: 'GET /health',
       login: 'POST /auth/login',
       upload: 'POST /upload',
-      gallery: 'GET /gallery             (coming in Step 7)',
+      gallery: 'GET /gallery',
+      deleteFile: 'DELETE /file/:filename',
       admin: {
         users: 'GET /admin/users',
         createUser: 'POST /admin/create-user',
