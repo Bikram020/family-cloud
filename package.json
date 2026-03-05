@@ -1,0 +1,13 @@
+{
+  "name": "family-cloud",
+  "version": "1.0.0",
+  "description": "Self-hosted family cloud storage system",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": ["cloud", "storage", "family", "self-hosted"],
+  "author": "",
+  "license": "ISC"
+}
