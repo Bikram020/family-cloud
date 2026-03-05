@@ -58,8 +58,15 @@ if (!fs.existsSync(usersFile)) {
 // ============================================
 // ROUTES
 // ============================================
-// We'll add actual route files in the next steps.
-// For now, we have a health check endpoint.
+// Import route files.
+// Each route file handles a group of related endpoints.
+const authRoutes = require('./routes/auth.routes');
+
+// --- Mount routes ---
+// app.use('/auth', authRoutes) means:
+//   Any route defined in auth.routes.js will be prefixed with /auth
+//   So router.post('/login') becomes POST /auth/login
+app.use('/auth', authRoutes);
 
 // --- Health Check ---
 // This is a simple endpoint to verify the server is running.
@@ -81,7 +88,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: 'GET /health',
-      login: 'POST /auth/login          (coming in Step 3)',
+      login: 'POST /auth/login',
       upload: 'POST /upload              (coming in Step 4)',
       gallery: 'GET /gallery             (coming in Step 7)',
       admin: 'GET /admin/users           (coming in Step 6)'
