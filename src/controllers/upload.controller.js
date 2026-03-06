@@ -16,7 +16,7 @@ const crypto = require('crypto');  // Built into Node.js — no extra package ne
 const { readUsers, writeUsers } = require('./auth.controller');
 
 // --- Configuration ---
-const STORAGE_BASE = path.join(__dirname, '..', '..', 'storage', 'user-files');
+const { STORAGE_BASE } = require('../config');
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB in bytes
 
 // Allowed file types

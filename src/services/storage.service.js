@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const STORAGE_BASE = path.join(__dirname, '..', '..', 'storage', 'user-files');
+const { STORAGE_BASE } = require('../config');
 
 // --- Get the size of a directory in MB ---
 // Recursively walks through all files and sums their sizes.

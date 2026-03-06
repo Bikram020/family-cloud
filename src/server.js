@@ -34,7 +34,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // --- Ensure storage directory exists ---
-const storagePath = path.join(__dirname, '..', 'storage', 'user-files');
+const { STORAGE_BASE } = require('./config');
+const storagePath = STORAGE_BASE;
 if (!fs.existsSync(storagePath)) {
   fs.mkdirSync(storagePath, { recursive: true });
   console.log('📁 Created storage directory:', storagePath);
