@@ -1,10 +1,5 @@
 // ============================================
-// App.js — Main entry point
-// ============================================
-// Sets up navigation:
-//   - Not logged in → Login / Register screens
-//   - Logged in → Tab navigation (Gallery, Upload, Profile, Admin*)
-//   * Admin tab only shows for admin users
+// App.js — Main entry point (React Navigation v6)
 // ============================================
 
 import React from 'react';
@@ -24,21 +19,13 @@ import AdminScreen from './src/screens/AdminScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// --- Tab icons (using emoji for simplicity) ---
-const tabIcons = {
-  Gallery: '🖼',
-  Upload: '⬆',
-  Profile: '👤',
-  Admin: '👑',
-};
-
 // --- Main tabs (shown after login) ---
 function MainTabs() {
   const { isAdmin } = useAuth();
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
+      screenOptions={{
         headerStyle: { backgroundColor: '#0f0f1a' },
         headerTintColor: '#fff',
         tabBarStyle: {
@@ -49,44 +36,55 @@ function MainTabs() {
         },
         tabBarActiveTintColor: '#6c5ce7',
         tabBarInactiveTintColor: '#555',
-        tabBarIcon: ({ focused }) => {
-          const icon = tabIcons[route.name] || '📱';
-          return (
-            <View style={{ opacity: focused ? 1 : 0.5 }}>
-              <Text style={{ fontSize: 22 }}>{icon}</Text>
-            </View>
-          );
-        },
-        tabBarLabel: route.name,
-      })}
+      }}
     >
       <Tab.Screen
         name="Gallery"
         component={GalleryScreen}
-        options={{ title: '☁️ My Cloud' }}
+        options={{
+          title: 'My Cloud',
+          tabBarIcon: ({ focused }) => (
+            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>🖼</Text>
+          ),
+        }}
       />
       <Tab.Screen
         name="Upload"
         component={UploadScreen}
-        options={{ title: '⬆ Upload' }}
+        options={{
+          title: 'Upload',
+          tabBarIcon: ({ focused }) => (
+            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>⬆️</Text>
+          ),
+        }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ title: '👤 Profile' }}
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ focused }) => (
+            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>👤</Text>
+          ),
+        }}
       />
       {isAdmin && (
         <Tab.Screen
           name="Admin"
           component={AdminScreen}
-          options={{ title: '👑 Admin' }}
+          options={{
+            title: 'Admin',
+            tabBarIcon: ({ focused }) => (
+              <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>👑</Text>
+            ),
+          }}
         />
       )}
     </Tab.Navigator>
   );
 }
 
-// --- App navigation (login vs main) ---
+// --- App navigation ---
 function AppNavigation() {
   const { isLoggedIn, loading } = useAuth();
 
@@ -121,7 +119,6 @@ function AppNavigation() {
   );
 }
 
-// --- Root component ---
 export default function App() {
   return (
     <AuthProvider>
