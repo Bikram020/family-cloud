@@ -13,13 +13,29 @@ export default function UploadScreen() {
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permission needed', 'Please allow access to your photo library'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-      selectionLimit: 20,
-    });
-    if (!result.canceled && result.assets) setSelectedImages(result.assets);
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
+      console.log('Picker result:', JSON.stringify(result).substring(0, 200));
+      if (!result.canceled && result.assets) {
+        setSelectedImages([...selectedImages, ...result.assets]);
+      }
+    } catch (e) {
+      console.log('Picker error:', e);
+      // Fallback: single select if multi doesn't work
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets) {
+        setSelectedImages([...selectedImages, ...result.assets]);
+      }
+    }
   };
 
   const takePhoto = async () => {
@@ -34,28 +50,40 @@ export default function UploadScreen() {
     setUploading(true);
     let ok = 0, fail = 0;
     setProgress({ current: 0, total: selectedImages.length });
+
     for (let i = 0; i < selectedImages.length; i++) {
       setProgress({ current: i + 1, total: selectedImages.length });
       try {
-        const fn = selectedImages[i].uri.split('/').pop() || `photo_${Date.now()}.jpg`;
-        await uploadAPI.uploadImage(token, selectedImages[i].uri, fn);
+        const fn = selectedImages[i].fileName || selectedImages[i].uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+        console.log('Uploading:', fn);
+        const result = await uploadAPI.uploadImage(token, selectedImages[i].uri, fn);
+        console.log('Upload result:', JSON.stringify(result));
         ok++;
-      } catch (e) { fail++; }
+      } catch (e) {
+        fail++;
+        console.log('Upload error:', e.message);
+        Alert.alert('Upload Error', e.message);
+      }
     }
-    setUploading(false); setSelectedImages([]);
-    Alert.alert(fail === 0 ? 'Upload Complete! 🎉' : 'Upload Done', `${ok} uploaded${fail > 0 ? `, ${fail} failed` : ''}.`);
+
+    setUploading(false);
+    setSelectedImages([]);
+    if (ok > 0) {
+      Alert.alert('Upload Complete! 🎉', `${ok} photo(s) uploaded.${fail > 0 ? ` ${fail} failed.` : ''}`);
+    }
   };
 
   return (
     <View style={s.container}>
       <View style={s.pickRow}>
         <TouchableOpacity style={s.pickBtn} onPress={pickImages}>
-          <Text style={s.pickIcon}>🖼</Text><Text style={s.pickText}>Choose from Gallery</Text>
+          <Text style={s.pickIcon}>🖼</Text><Text style={s.pickText}>Choose Photos</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[s.pickBtn, s.camBtn]} onPress={takePhoto}>
           <Text style={s.pickIcon}>📷</Text><Text style={s.pickText}>Take Photo</Text>
         </TouchableOpacity>
       </View>
+
       {selectedImages.length > 0 && (
         <>
           <Text style={s.count}>{selectedImages.length} photo(s) selected</Text>
@@ -76,6 +104,7 @@ export default function UploadScreen() {
           </TouchableOpacity>
         </>
       )}
+
       {selectedImages.length === 0 && (
         <View style={s.empty}><Text style={s.emptyIcon}>☁️</Text><Text style={s.emptyText}>Select photos to upload to your cloud</Text></View>
       )}

@@ -19,11 +19,15 @@ export default function GalleryScreen() {
 
   const loadPhotos = async () => {
     try {
+      console.log('Loading gallery for:', user?.username);
       const data = await galleryAPI.getMyPhotos(token);
+      console.log('Gallery response:', JSON.stringify(data));
       setPhotos(data.files || []);
       setStorage(data.storage);
-    } catch (error) { console.log('Gallery error:', error.message); }
-    finally { setLoading(false); setRefreshing(false); }
+    } catch (error) {
+      console.log('Gallery error:', error.message, error.status);
+      Alert.alert('Gallery Error', error.message || 'Could not load photos');
+    } finally { setLoading(false); setRefreshing(false); }
   };
 
   const handleDelete = (photo) => {
@@ -42,7 +46,12 @@ export default function GalleryScreen() {
 
   const renderPhoto = ({ item }) => (
     <TouchableOpacity style={s.photoCard} onPress={() => setSelectedPhoto(item)} activeOpacity={0.8}>
-      <Image source={{ uri: getImageUrl(item), headers: { Authorization: `Bearer ${token}` } }} style={s.photoImage} resizeMode="cover" />
+      <Image
+        source={{ uri: getImageUrl(item), headers: { Authorization: `Bearer ${token}` } }}
+        style={s.photoImage}
+        resizeMode="cover"
+        onError={(e) => console.log('Image load error:', e.nativeEvent.error, getImageUrl(item))}
+      />
     </TouchableOpacity>
   );
 
@@ -56,7 +65,7 @@ export default function GalleryScreen() {
             <Text style={s.storageText}>{storage.used} / {storage.quota} used</Text>
             <Text style={s.photoCount}>{photos.length} photos</Text>
           </View>
-          <View style={s.track}><View style={[s.fill, { width: `${Math.min(storage.usagePercent, 100)}%` }]} /></View>
+          <View style={s.track}><View style={[s.fill, { width: `${Math.min(storage.usagePercent || 0, 100)}%` }]} /></View>
         </View>
       )}
       {photos.length === 0 ? (
@@ -97,7 +106,7 @@ const s = StyleSheet.create({
   track: { height: 4, backgroundColor: '#1a1a2e', borderRadius: 2 },
   fill: { height: 4, backgroundColor: '#6c5ce7', borderRadius: 2 },
   grid: { padding: 12 },
-  photoCard: { width: PHOTO_SIZE, height: PHOTO_SIZE, margin: 4, borderRadius: 8, overflow: 'hidden' },
+  photoCard: { width: PHOTO_SIZE, height: PHOTO_SIZE, margin: 4, borderRadius: 8, overflow: 'hidden', backgroundColor: '#1a1a2e' },
   photoImage: { width: '100%', height: '100%' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
