@@ -1,9 +1,1 @@
-[
-  {
-    "username": "admin",
-    "password": "$2b$10$c3FuusSlLVPNfaaF24Yr4Ognz2x2iSCMNzAsOQ/iMt0UQ/2ylTX/W",
-    "role": "admin",
-    "quota": 30000,
-    "usedStorage": 0
-  }
-]
+[]
