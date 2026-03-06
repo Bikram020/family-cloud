@@ -1,9 +1,9 @@
 import React from 'react';
-import { StatusBar, ActivityIndicator, View, Text, Platform } from 'react-native';
+import { StatusBar, ActivityIndicator, View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
@@ -14,71 +14,63 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import AdminScreen from './src/screens/AdminScreen';
 
 const Stack = createNativeStackNavigator();
-const Tab = createBottomTabNavigator();
+const Tab = createMaterialTopTabNavigator();
 
 function MainTabs() {
   const { isAdmin } = useAuth();
+  const insets = useSafeAreaInsets();
 
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: '#0f0f1a' },
-        headerTintColor: '#fff',
-        tabBarStyle: {
-          backgroundColor: '#0f0f1a',
-          borderTopColor: '#1a1a2e',
-          paddingTop: 6,
-          paddingBottom: 12,
-          height: 80,
-        },
-        tabBarActiveTintColor: '#6c5ce7',
-        tabBarInactiveTintColor: '#555',
-        tabBarLabelStyle: { fontSize: 12, paddingBottom: 4 },
-      }}
-    >
-      <Tab.Screen
-        name="Gallery"
-        component={GalleryScreen}
-        options={{
-          title: 'My Cloud',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>🖼</Text>
-          ),
+    <View style={{ flex: 1, backgroundColor: '#0f0f1a', paddingTop: insets.top }}>
+      <Tab.Navigator
+        screenOptions={{
+          tabBarStyle: {
+            backgroundColor: '#0f0f1a',
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 1,
+            borderBottomColor: '#1a1a2e',
+          },
+          tabBarActiveTintColor: '#6c5ce7',
+          tabBarInactiveTintColor: '#555',
+          tabBarIndicatorStyle: {
+            backgroundColor: '#6c5ce7',
+            height: 3,
+            borderRadius: 2,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '600',
+            textTransform: 'none',
+          },
+          swipeEnabled: true,
+          lazy: true,
         }}
-      />
-      <Tab.Screen
-        name="Upload"
-        component={UploadScreen}
-        options={{
-          title: 'Upload',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>⬆️</Text>
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>👤</Text>
-          ),
-        }}
-      />
-      {isAdmin && (
+      >
         <Tab.Screen
-          name="Admin"
-          component={AdminScreen}
-          options={{
-            title: 'Admin',
-            tabBarIcon: ({ focused }) => (
-              <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>👑</Text>
-            ),
-          }}
+          name="Gallery"
+          component={GalleryScreen}
+          options={{ tabBarLabel: '🖼 Cloud' }}
         />
-      )}
-    </Tab.Navigator>
+        <Tab.Screen
+          name="Upload"
+          component={UploadScreen}
+          options={{ tabBarLabel: '⬆️ Upload' }}
+        />
+        <Tab.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{ tabBarLabel: '👤 Profile' }}
+        />
+        {isAdmin && (
+          <Tab.Screen
+            name="Admin"
+            component={AdminScreen}
+            options={{ tabBarLabel: '👑 Admin' }}
+          />
+        )}
+      </Tab.Navigator>
+    </View>
   );
 }
 
