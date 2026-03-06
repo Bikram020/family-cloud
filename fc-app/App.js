@@ -1,12 +1,9 @@
-// ============================================
-// App.js — Main entry point (React Navigation v6)
-// ============================================
-
 import React from 'react';
-import { StatusBar, ActivityIndicator, View, Text } from 'react-native';
+import { StatusBar, ActivityIndicator, View, Text, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
@@ -19,7 +16,6 @@ import AdminScreen from './src/screens/AdminScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// --- Main tabs (shown after login) ---
 function MainTabs() {
   const { isAdmin } = useAuth();
 
@@ -31,11 +27,13 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: '#0f0f1a',
           borderTopColor: '#1a1a2e',
-          paddingTop: 4,
-          height: 60,
+          paddingTop: 6,
+          paddingBottom: 12,
+          height: 80,
         },
         tabBarActiveTintColor: '#6c5ce7',
         tabBarInactiveTintColor: '#555',
+        tabBarLabelStyle: { fontSize: 12, paddingBottom: 4 },
       }}
     >
       <Tab.Screen
@@ -44,7 +42,7 @@ function MainTabs() {
         options={{
           title: 'My Cloud',
           tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>🖼</Text>
+            <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>🖼</Text>
           ),
         }}
       />
@@ -54,7 +52,7 @@ function MainTabs() {
         options={{
           title: 'Upload',
           tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>⬆️</Text>
+            <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>⬆️</Text>
           ),
         }}
       />
@@ -64,7 +62,7 @@ function MainTabs() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>👤</Text>
+            <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>👤</Text>
           ),
         }}
       />
@@ -75,7 +73,7 @@ function MainTabs() {
           options={{
             title: 'Admin',
             tabBarIcon: ({ focused }) => (
-              <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>👑</Text>
+              <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>👑</Text>
             ),
           }}
         />
@@ -84,7 +82,6 @@ function MainTabs() {
   );
 }
 
-// --- App navigation ---
 function AppNavigation() {
   const { isLoggedIn, loading } = useAuth();
 
@@ -121,11 +118,13 @@ function AppNavigation() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <StatusBar barStyle="light-content" backgroundColor="#0f0f1a" />
-      <NavigationContainer>
-        <AppNavigation />
-      </NavigationContainer>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <StatusBar barStyle="light-content" backgroundColor="#0f0f1a" />
+        <NavigationContainer>
+          <AppNavigation />
+        </NavigationContainer>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
