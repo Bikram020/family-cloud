@@ -69,10 +69,17 @@ app.use('/gallery', galleryRoutes);
 app.use('/file', galleryRoutes);
 
 // --- Static file serving ---
-// Serves uploaded images so the frontend can display them.
-// GET /files/mom/photo.jpg → serves storage/user-files/mom/photo.jpg
+// Serves uploaded images. Accepts auth via:
+//   1. Authorization: Bearer <token> (header)
+//   2. ?token=<token> (query param — for React Native Image)
 const { authenticate } = require('./middleware/auth.middleware');
-app.use('/files', authenticate, express.static(storagePath));
+app.use('/files', (req, res, next) => {
+  // If no Authorization header, check for ?token= query param
+  if (!req.headers.authorization && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+}, authenticate, express.static(storagePath));
 
 // --- Health Check ---
 app.get('/health', (req, res) => {

@@ -42,12 +42,12 @@ export default function GalleryScreen() {
     ]);
   };
 
-  const getImageUrl = (photo) => `${SERVER_URL}/files/${user.username}/${photo.filename}`;
+  const getImageUrl = (photo) => `${SERVER_URL}/files/${user.username}/${photo.filename}?token=${token}`;
 
   const renderPhoto = ({ item }) => (
     <TouchableOpacity style={s.photoCard} onPress={() => setSelectedPhoto(item)} activeOpacity={0.8}>
       <Image
-        source={{ uri: getImageUrl(item), headers: { Authorization: `Bearer ${token}` } }}
+        source={{ uri: getImageUrl(item) }}
         style={s.photoImage}
         resizeMode="cover"
         onError={(e) => console.log('Image load error:', e.nativeEvent.error, getImageUrl(item))}
@@ -83,7 +83,7 @@ export default function GalleryScreen() {
           <TouchableOpacity style={s.closeBtn} onPress={() => setSelectedPhoto(null)}><Text style={s.closeTxt}>✕</Text></TouchableOpacity>
           {selectedPhoto && (
             <>
-              <Image source={{ uri: getImageUrl(selectedPhoto), headers: { Authorization: `Bearer ${token}` } }} style={s.fullImg} resizeMode="contain" />
+              <Image source={{ uri: getImageUrl(selectedPhoto) }} style={s.fullImg} resizeMode="contain" />
               <View style={s.modalInfo}>
                 <Text style={s.modalFile}>{selectedPhoto.filename}</Text>
                 <TouchableOpacity style={s.delBtn} onPress={() => handleDelete(selectedPhoto)}><Text style={s.delTxt}>🗑 Delete</Text></TouchableOpacity>
