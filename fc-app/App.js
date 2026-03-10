@@ -59,11 +59,6 @@ function MainTabs() {
             options={{ tabBarLabel: '⬆️ Upload' }}
           />
         )}
-        <Tab.Screen
-          name="Profile"
-          component={ProfileScreen}
-          options={{ tabBarLabel: '👤 Profile' }}
-        />
         {isAdmin && (
           <Tab.Screen
             name="Admin"
@@ -71,6 +66,11 @@ function MainTabs() {
             options={{ tabBarLabel: '👑 Admin' }}
           />
         )}
+        <Tab.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{ tabBarLabel: '👤 Profile' }}
+        />
       </Tab.Navigator>
     </View>
   );

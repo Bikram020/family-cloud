@@ -4,8 +4,8 @@ const SERVER_URL = 'http://100.121.10.37:3000';
 const apiCall = async (endpoint, options = {}) => {
   const url = `${SERVER_URL}${endpoint}`;
   const config = {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   };
   try {
     const response = await fetch(url, config);
