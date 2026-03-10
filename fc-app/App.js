@@ -47,11 +47,13 @@ function MainTabs() {
           lazy: true,
         }}
       >
-        <Tab.Screen
-          name="Gallery"
-          component={GalleryScreen}
-          options={{ tabBarLabel: '🖼 Cloud' }}
-        />
+        {!isAdmin && (
+          <Tab.Screen
+            name="Gallery"
+            component={GalleryScreen}
+            options={{ tabBarLabel: '🖼 Cloud' }}
+          />
+        )}
         {!isAdmin && (
           <Tab.Screen
             name="Upload"

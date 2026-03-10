@@ -1,10 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, FlatList, Image, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { galleryAPI, SERVER_URL } from '../services/api';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const PHOTO_SIZE = (width - 48) / 3;
 
 export default function GalleryScreen() {
@@ -13,30 +13,38 @@ export default function GalleryScreen() {
   const [storage, setStorage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const flatListRef = useRef(null);
 
   useFocusEffect(useCallback(() => { loadPhotos(); }, []));
 
   const loadPhotos = async () => {
     try {
-      console.log('Loading gallery for:', user?.username);
       const data = await galleryAPI.getMyPhotos(token);
-      console.log('Gallery response:', JSON.stringify(data));
       setPhotos(data.files || []);
       setStorage(data.storage);
     } catch (error) {
-      console.log('Gallery error:', error.message, error.status);
       Alert.alert('Gallery Error', error.message || 'Could not load photos');
     } finally { setLoading(false); setRefreshing(false); }
   };
 
-  const handleDelete = (photo) => {
+  const openViewer = (index) => {
+    setViewerIndex(index);
+    setViewerVisible(true);
+  };
+
+  const handleDelete = () => {
+    const photo = photos[viewerIndex];
     Alert.alert('Delete Photo', 'Delete this photo from the cloud?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
-          try { await galleryAPI.deletePhoto(token, photo.filename); setSelectedPhoto(null); loadPhotos(); }
-          catch (error) { Alert.alert('Error', error.message); }
+          try {
+            await galleryAPI.deletePhoto(token, photo.filename);
+            setViewerVisible(false);
+            loadPhotos();
+          } catch (error) { Alert.alert('Error', error.message); }
         }
       },
     ]);
@@ -44,16 +52,22 @@ export default function GalleryScreen() {
 
   const getImageUrl = (photo) => `${SERVER_URL}/files/${user.username}/${photo.filename}?token=${token}`;
 
-  const renderPhoto = ({ item }) => (
-    <TouchableOpacity style={s.photoCard} onPress={() => setSelectedPhoto(item)} activeOpacity={0.8}>
-      <Image
-        source={{ uri: getImageUrl(item) }}
-        style={s.photoImage}
-        resizeMode="cover"
-        onError={(e) => console.log('Image load error:', e.nativeEvent.error, getImageUrl(item))}
-      />
+  const renderPhoto = ({ item, index }) => (
+    <TouchableOpacity style={s.photoCard} onPress={() => openViewer(index)} activeOpacity={0.8}>
+      <Image source={{ uri: getImageUrl(item) }} style={s.photoImage} resizeMode="cover" />
     </TouchableOpacity>
   );
+
+  const renderViewerItem = ({ item }) => (
+    <View style={s.viewerSlide}>
+      <Image source={{ uri: getImageUrl(item) }} style={s.fullImg} resizeMode="contain" />
+    </View>
+  );
+
+  const onViewerScroll = (e) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+    setViewerIndex(idx);
+  };
 
   if (loading) return <View style={s.center}><ActivityIndicator size="large" color="#6c5ce7" /></View>;
 
@@ -78,18 +92,31 @@ export default function GalleryScreen() {
         <FlatList data={photos} renderItem={renderPhoto} keyExtractor={(item) => item.filename} numColumns={3} contentContainerStyle={s.grid}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadPhotos(); }} tintColor="#6c5ce7" />} />
       )}
-      <Modal visible={!!selectedPhoto} transparent animationType="fade">
+
+      {/* Full-screen swipeable photo viewer */}
+      <Modal visible={viewerVisible} transparent animationType="fade">
         <View style={s.modal}>
-          <TouchableOpacity style={s.closeBtn} onPress={() => setSelectedPhoto(null)}><Text style={s.closeTxt}>✕</Text></TouchableOpacity>
-          {selectedPhoto && (
-            <>
-              <Image source={{ uri: getImageUrl(selectedPhoto) }} style={s.fullImg} resizeMode="contain" />
-              <View style={s.modalInfo}>
-                <Text style={s.modalFile}>{selectedPhoto.filename}</Text>
-                <TouchableOpacity style={s.delBtn} onPress={() => handleDelete(selectedPhoto)}><Text style={s.delTxt}>🗑 Delete</Text></TouchableOpacity>
-              </View>
-            </>
-          )}
+          <TouchableOpacity style={s.closeBtn} onPress={() => setViewerVisible(false)}><Text style={s.closeTxt}>✕</Text></TouchableOpacity>
+
+          <FlatList
+            ref={flatListRef}
+            data={photos}
+            renderItem={renderViewerItem}
+            keyExtractor={(item) => item.filename}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={onViewerScroll}
+            initialScrollIndex={viewerIndex}
+            getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+          />
+
+          {/* Photo info + delete */}
+          <View style={s.modalInfo}>
+            <Text style={s.counter}>{viewerIndex + 1} / {photos.length}</Text>
+            <Text style={s.modalFile}>{photos[viewerIndex]?.filename}</Text>
+            <TouchableOpacity style={s.delBtn} onPress={handleDelete}><Text style={s.delTxt}>🗑 Delete</Text></TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </View>
@@ -112,12 +139,14 @@ const s = StyleSheet.create({
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: '600', color: '#fff', marginBottom: 8 },
   emptyText: { fontSize: 14, color: '#888', textAlign: 'center' },
-  modal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
+  modal: { flex: 1, backgroundColor: '#000' },
   closeBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
   closeTxt: { color: '#fff', fontSize: 20 },
-  fullImg: { width: width, height: width },
-  modalInfo: { alignItems: 'center', marginTop: 20 },
-  modalFile: { color: '#aaa', fontSize: 12, marginBottom: 16 },
+  viewerSlide: { width: width, flex: 1, justifyContent: 'center', alignItems: 'center' },
+  fullImg: { width: width, height: height * 0.7 },
+  modalInfo: { position: 'absolute', bottom: 40, left: 0, right: 0, alignItems: 'center' },
+  counter: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  modalFile: { color: '#aaa', fontSize: 11, marginBottom: 14 },
   delBtn: { backgroundColor: '#e74c3c', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 },
   delTxt: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
