@@ -52,11 +52,13 @@ function MainTabs() {
           component={GalleryScreen}
           options={{ tabBarLabel: '🖼 Cloud' }}
         />
-        <Tab.Screen
-          name="Upload"
-          component={UploadScreen}
-          options={{ tabBarLabel: '⬆️ Upload' }}
-        />
+        {!isAdmin && (
+          <Tab.Screen
+            name="Upload"
+            component={UploadScreen}
+            options={{ tabBarLabel: '⬆️ Upload' }}
+          />
+        )}
         <Tab.Screen
           name="Profile"
           component={ProfileScreen}

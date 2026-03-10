@@ -1,11 +1,6 @@
 // ============================================
 // Shared Config — Central configuration
 // ============================================
-// Storage path for uploaded files.
-// Using shared storage so photos appear in the phone's gallery app.
-// After running `termux-setup-storage`, ~/storage/shared maps to /sdcard/
-// Each user gets their own album folder (e.g., FamilyCloud/dad/, FamilyCloud/mom/)
-// ============================================
 
 const path = require('path');
 const os = require('os');
@@ -18,4 +13,9 @@ const STORAGE_BASE = isTermux
   ? path.join(os.homedir(), 'storage', 'shared', 'Pictures', 'FamilyCloud')
   : path.join(__dirname, '..', 'storage', 'user-files');
 
-module.exports = { STORAGE_BASE };
+// Total storage pool in MB (adjust based on your S10's available storage)
+// This is the maximum amount ALL users can share.
+// Unallocated = TOTAL_STORAGE_POOL - sum of all user quotas
+const TOTAL_STORAGE_POOL = 30000; // 30 GB
+
+module.exports = { STORAGE_BASE, TOTAL_STORAGE_POOL };
