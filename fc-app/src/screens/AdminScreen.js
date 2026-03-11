@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
   RefreshControl, TextInput, Modal, Image, Dimensions, ScrollView
@@ -7,7 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { adminAPI, SERVER_URL } from '../services/api';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const PHOTO_SIZE = (width - 56) / 3;
 
 export default function AdminScreen() {
@@ -23,9 +23,11 @@ export default function AdminScreen() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userFiles, setUserFiles] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const [quotaModal, setQuotaModal] = useState(false);
   const [newQuota, setNewQuota] = useState('');
+  const viewerRef = useRef(null);
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
 
@@ -83,7 +85,7 @@ export default function AdminScreen() {
         text: 'Delete', style: 'destructive', onPress: async () => {
           try {
             await adminAPI.deleteUserFile(token, selectedUser.username, filename);
-            setSelectedPhoto(null);
+            setViewerVisible(false);
             openUserDetail(selectedUser);
             loadData();
           } catch (e) { Alert.alert('Error', e.message); }
@@ -111,6 +113,17 @@ export default function AdminScreen() {
   if (view === 'detail' && selectedUser) {
     const pct = selectedUser.quota > 0 ? ((selectedUser.usedStorage / selectedUser.quota) * 100).toFixed(1) : 0;
     const getImageUrl = (file) => `${SERVER_URL}/files/${selectedUser.username}/${file.filename}?token=${token}`;
+    const openViewer = (index) => {
+      setViewerIndex(index);
+      setViewerVisible(true);
+    };
+
+    const onViewerScroll = (e) => {
+      const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+      setViewerIndex(idx);
+    };
+
+    const currentPhoto = userFiles[viewerIndex];
 
     return (
       <View style={s.container}>
@@ -157,8 +170,8 @@ export default function AdminScreen() {
               <View style={s.emptyCard}><Text style={s.emptyText}>No photos uploaded yet</Text></View>
             ) : (
               <View style={s.photoGrid}>
-                {userFiles.map((file) => (
-                  <TouchableOpacity key={file.filename} style={s.photoCard} onPress={() => setSelectedPhoto(file)}>
+                {userFiles.map((file, index) => (
+                  <TouchableOpacity key={file.filename} style={s.photoCard} onPress={() => openViewer(index)}>
                     <Image source={{ uri: getImageUrl(file) }} style={s.photoImg} resizeMode="cover" />
                   </TouchableOpacity>
                 ))}
@@ -168,21 +181,37 @@ export default function AdminScreen() {
         </ScrollView>
 
         {/* Full-screen photo modal */}
-        <Modal visible={!!selectedPhoto} transparent animationType="fade">
+        <Modal visible={viewerVisible} transparent animationType="fade">
           <View style={s.modal}>
-            <TouchableOpacity style={s.closeBtn} onPress={() => setSelectedPhoto(null)}><Text style={s.closeTxt}>✕</Text></TouchableOpacity>
-            {selectedPhoto && (
-              <>
-                <Image source={{ uri: getImageUrl(selectedPhoto) }} style={s.fullImg} resizeMode="contain" />
-                <View style={s.modalInfo}>
-                  <Text style={s.modalFile}>{selectedPhoto.filename}</Text>
-                  <Text style={s.modalSize}>{selectedPhoto.size}</Text>
-                  <TouchableOpacity style={s.delPhotoBtn} onPress={() => handleDeleteFile(selectedPhoto.filename)}>
-                    <Text style={s.delPhotoTxt}>🗑 Delete This Photo</Text>
-                  </TouchableOpacity>
+            <TouchableOpacity style={s.closeBtn} onPress={() => setViewerVisible(false)}><Text style={s.closeTxt}>✕</Text></TouchableOpacity>
+
+            <FlatList
+              ref={viewerRef}
+              data={userFiles}
+              keyExtractor={(item) => item.filename}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={viewerIndex}
+              onMomentumScrollEnd={onViewerScroll}
+              getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+              renderItem={({ item }) => (
+                <View style={s.viewerSlide}>
+                  <Image source={{ uri: getImageUrl(item) }} style={s.fullImg} resizeMode="contain" />
                 </View>
-              </>
-            )}
+              )}
+            />
+
+            <View style={s.modalInfo}>
+              <Text style={s.counter}>{viewerIndex + 1} / {userFiles.length}</Text>
+              <Text style={s.modalFile}>{currentPhoto?.filename}</Text>
+              <Text style={s.modalSize}>{currentPhoto?.size}</Text>
+              {!!currentPhoto && (
+                <TouchableOpacity style={s.delPhotoBtn} onPress={() => handleDeleteFile(currentPhoto.filename)}>
+                  <Text style={s.delPhotoTxt}>🗑 Delete This Photo</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </Modal>
 
@@ -344,11 +373,13 @@ const s = StyleSheet.create({
   photoImg: { width: '100%', height: '100%' },
 
   // Photo modal
-  modal: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
+  modal: { flex: 1, backgroundColor: '#000' },
   closeBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
   closeTxt: { color: '#fff', fontSize: 20 },
-  fullImg: { width: width, height: width },
-  modalInfo: { alignItems: 'center', marginTop: 20 },
+  viewerSlide: { width: width, flex: 1, justifyContent: 'center', alignItems: 'center' },
+  fullImg: { width: width, height: height * 0.7 },
+  modalInfo: { position: 'absolute', bottom: 40, left: 0, right: 0, alignItems: 'center' },
+  counter: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 4 },
   modalFile: { color: '#aaa', fontSize: 12, marginBottom: 4 },
   modalSize: { color: '#888', fontSize: 12, marginBottom: 16 },
   delPhotoBtn: { backgroundColor: '#e74c3c', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 },
