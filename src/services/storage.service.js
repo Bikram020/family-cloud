@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { STORAGE_BASE } = require('../config');
+const { deleteThumbnail, deleteUserThumbnailFolder } = require('./thumbnail.service');
 
 // --- Get the size of a directory in MB ---
 // Recursively walks through all files and sums their sizes.
@@ -53,7 +54,8 @@ const getUserFiles = (username) => {
         sizeBytes: stat.size,
         uploadedAt: stat.birthtime.toISOString(),
         // URL that the frontend can use to display the image
-        url: `/files/${username}/${filename}`
+        url: `/files/${username}/${filename}`,
+        thumbnailUrl: `/thumbs/${username}/${filename}`
       };
     })
     .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)); // newest first
@@ -71,6 +73,7 @@ const deleteFile = (username, filename) => {
   const fileSizeMB = stat.size / (1024 * 1024);
 
   fs.unlinkSync(filePath);
+  deleteThumbnail(username, filename);
 
   return { success: true, freedMB: fileSizeMB };
 };
@@ -82,6 +85,8 @@ const deleteUserFolder = (username) => {
   if (fs.existsSync(userFolder)) {
     fs.rmSync(userFolder, { recursive: true, force: true });
   }
+
+  deleteUserThumbnailFolder(username);
 };
 
 // --- Recalculate actual disk usage for a user ---

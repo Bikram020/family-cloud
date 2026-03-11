@@ -113,6 +113,9 @@ export default function AdminScreen() {
   if (view === 'detail' && selectedUser) {
     const pct = selectedUser.quota > 0 ? ((selectedUser.usedStorage / selectedUser.quota) * 100).toFixed(1) : 0;
     const getImageUrl = (file) => `${SERVER_URL}/files/${selectedUser.username}/${file.filename}?token=${token}`;
+    const getThumbUrl = (file) => file.thumbnailUrl
+      ? `${SERVER_URL}${file.thumbnailUrl}?token=${token}`
+      : getImageUrl(file);
     const openViewer = (index) => {
       setViewerIndex(index);
       setViewerVisible(true);
@@ -172,7 +175,7 @@ export default function AdminScreen() {
               <View style={s.photoGrid}>
                 {userFiles.map((file, index) => (
                   <TouchableOpacity key={file.filename} style={s.photoCard} onPress={() => openViewer(index)}>
-                    <Image source={{ uri: getImageUrl(file) }} style={s.photoImg} resizeMode="cover" />
+                    <Image source={{ uri: getThumbUrl(file) }} style={s.photoImg} resizeMode="cover" />
                   </TouchableOpacity>
                 ))}
               </View>

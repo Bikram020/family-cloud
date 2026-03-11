@@ -34,11 +34,16 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // --- Ensure storage directory exists ---
-const { STORAGE_BASE } = require('./config');
+const { STORAGE_BASE, THUMBNAIL_BASE } = require('./config');
 const storagePath = STORAGE_BASE;
 if (!fs.existsSync(storagePath)) {
   fs.mkdirSync(storagePath, { recursive: true });
   console.log('📁 Created storage directory:', storagePath);
+}
+
+if (!fs.existsSync(THUMBNAIL_BASE)) {
+  fs.mkdirSync(THUMBNAIL_BASE, { recursive: true });
+  console.log('🖼️ Created thumbnail directory:', THUMBNAIL_BASE);
 }
 
 // --- Ensure data directory exists ---
@@ -74,13 +79,45 @@ app.use('/file', galleryRoutes);
 //   1. Authorization: Bearer <token> (header)
 //   2. ?token=<token> (query param — for React Native Image)
 const { authenticate } = require('./middleware/auth.middleware');
-app.use('/files', (req, res, next) => {
+const applyQueryTokenAuth = (req, res, next) => {
   // If no Authorization header, check for ?token= query param
   if (!req.headers.authorization && req.query.token) {
     req.headers.authorization = `Bearer ${req.query.token}`;
   }
   next();
-}, authenticate, express.static(storagePath));
+};
+
+app.use('/files', applyQueryTokenAuth, authenticate, express.static(storagePath));
+
+// --- Thumbnail serving ---
+// GET /thumbs/:username/:filename?token=<jwt>
+// Thumbnails are generated lazily if missing.
+const { ensureThumbnail } = require('./services/thumbnail.service');
+app.get('/thumbs/:username/:filename', applyQueryTokenAuth, authenticate, async (req, res) => {
+  try {
+    const username = String(req.params.username || '').toLowerCase();
+    const filename = req.params.filename;
+
+    if (!username || !filename) {
+      return res.status(400).json({ error: 'Username and filename are required' });
+    }
+
+    const canAccess = req.user.role === 'admin' || req.user.username === username;
+    if (!canAccess) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const thumbPath = await ensureThumbnail(username, filename);
+    return res.sendFile(thumbPath);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    console.error('❌ Thumbnail error:', error.message);
+    return res.status(500).json({ error: 'Could not load thumbnail' });
+  }
+});
 
 // --- Health Check ---
 app.get('/health', (req, res) => {
@@ -114,6 +151,7 @@ app.get('/', (req, res) => {
       gallery: 'GET /gallery',
       deleteFile: 'DELETE /file/:filename',
       files: 'GET /files/:username/:filename',
+      thumbs: 'GET /thumbs/:username/:filename',
       admin: {
         users: 'GET /admin/users',
         userFiles: 'GET /admin/user/:username/files',

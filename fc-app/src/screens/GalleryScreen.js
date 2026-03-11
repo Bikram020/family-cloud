@@ -51,10 +51,13 @@ export default function GalleryScreen() {
   };
 
   const getImageUrl = (photo) => `${SERVER_URL}/files/${user.username}/${photo.filename}?token=${token}`;
+  const getThumbUrl = (photo) => photo.thumbnailUrl
+    ? `${SERVER_URL}${photo.thumbnailUrl}?token=${token}`
+    : getImageUrl(photo);
 
   const renderPhoto = ({ item, index }) => (
     <TouchableOpacity style={s.photoCard} onPress={() => openViewer(index)} activeOpacity={0.8}>
-      <Image source={{ uri: getImageUrl(item) }} style={s.photoImage} resizeMode="cover" />
+      <Image source={{ uri: getThumbUrl(item) }} style={s.photoImage} resizeMode="cover" />
     </TouchableOpacity>
   );
 
