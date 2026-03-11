@@ -29,9 +29,9 @@ export const galleryAPI = {
 };
 
 export const uploadAPI = {
-  uploadImage: async (token, imageUri, filename) => {
+  uploadImage: async (token, imageUri, filename, mimeType = 'image/jpeg') => {
     const formData = new FormData();
-    formData.append('image', { uri: imageUri, name: filename || 'photo.jpg', type: 'image/jpeg' });
+    formData.append('image', { uri: imageUri, name: filename || 'photo.jpg', type: mimeType });
     const response = await fetch(`${SERVER_URL}/upload`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },

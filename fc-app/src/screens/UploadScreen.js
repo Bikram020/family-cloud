@@ -4,6 +4,19 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { uploadAPI } from '../services/api';
 
+const PARALLEL_UPLOADS = 3;
+const MAX_RETRIES = 2;
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const getMimeTypeFromName = (filename = '') => {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  return 'image/jpeg';
+};
+
 export default function UploadScreen() {
   const { token } = useAuth();
   const [selectedImages, setSelectedImages] = useState([]);
@@ -18,7 +31,8 @@ export default function UploadScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
-        quality: 0.8,
+        quality: 1,
+        allowsEditing: false,
       });
       console.log('Picker result:', JSON.stringify(result).substring(0, 200));
       if (!result.canceled && result.assets) {
@@ -30,7 +44,8 @@ export default function UploadScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: false,
-        quality: 0.8,
+        quality: 1,
+        allowsEditing: false,
       });
       if (!result.canceled && result.assets) {
         setSelectedImages([...selectedImages, ...result.assets]);
@@ -41,36 +56,78 @@ export default function UploadScreen() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permission needed', 'Please allow camera access'); return; }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    const result = await ImagePicker.launchCameraAsync({ quality: 1, allowsEditing: false });
     if (!result.canceled && result.assets) setSelectedImages([...selectedImages, ...result.assets]);
+  };
+
+  const uploadOneWithRetry = async (asset) => {
+    const filename = asset.fileName || asset.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+    const mimeType = (asset.mimeType && asset.mimeType.startsWith('image/'))
+      ? asset.mimeType
+      : getMimeTypeFromName(filename);
+
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+      try {
+        await uploadAPI.uploadImage(token, asset.uri, filename, mimeType);
+        return { ok: true, asset };
+      } catch (error) {
+        lastError = error;
+        const retryable = !error.status || error.status === 0 || error.status >= 500;
+        if (!retryable || attempt > MAX_RETRIES) break;
+        await delay(300 * attempt);
+      }
+    }
+
+    return {
+      ok: false,
+      asset,
+      error: lastError?.message || 'Upload failed',
+      filename
+    };
   };
 
   const uploadAll = async () => {
     if (selectedImages.length === 0) return;
     setUploading(true);
-    let ok = 0, fail = 0;
+    let ok = 0;
+    const failed = [];
     setProgress({ current: 0, total: selectedImages.length });
 
-    for (let i = 0; i < selectedImages.length; i++) {
-      setProgress({ current: i + 1, total: selectedImages.length });
-      try {
-        const fn = selectedImages[i].fileName || selectedImages[i].uri.split('/').pop() || `photo_${Date.now()}.jpg`;
-        console.log('Uploading:', fn);
-        const result = await uploadAPI.uploadImage(token, selectedImages[i].uri, fn);
-        console.log('Upload result:', JSON.stringify(result));
-        ok++;
-      } catch (e) {
-        fail++;
-        console.log('Upload error:', e.message);
-        Alert.alert('Upload Error', e.message);
-      }
+    for (let i = 0; i < selectedImages.length; i += PARALLEL_UPLOADS) {
+      const chunk = selectedImages.slice(i, i + PARALLEL_UPLOADS);
+      const results = await Promise.all(chunk.map(uploadOneWithRetry));
+
+      results.forEach((result) => {
+        if (result.ok) {
+          ok++;
+        } else {
+          failed.push(result);
+        }
+      });
+
+      setProgress((prev) => ({ ...prev, current: Math.min(prev.current + chunk.length, prev.total) }));
     }
 
     setUploading(false);
-    setSelectedImages([]);
-    if (ok > 0) {
-      Alert.alert('Upload Complete! 🎉', `${ok} photo(s) uploaded.${fail > 0 ? ` ${fail} failed.` : ''}`);
+    setSelectedImages(failed.map(item => item.asset));
+
+    if (failed.length === 0) {
+      Alert.alert('Upload Complete! 🎉', `${ok} photo(s) uploaded.`);
+      return;
     }
+
+    const failCount = failed.length;
+    const sampleNames = failed.slice(0, 3).map(f => f.filename).join(', ');
+    const details = sampleNames
+      ? `Failed: ${sampleNames}${failCount > 3 ? '...' : ''}`
+      : 'Some photos failed to upload.';
+
+    Alert.alert(
+      'Upload Finished With Some Failures',
+      `${ok} uploaded, ${failCount} failed. Failed photos are still selected so you can retry.\n\n${details}`
+    );
   };
 
   return (

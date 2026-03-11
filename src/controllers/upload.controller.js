@@ -14,7 +14,6 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');  // Built into Node.js — no extra package needed
 const { readUsers, writeUsers } = require('./auth.controller');
-const { ensureThumbnail } = require('../services/thumbnail.service');
 
 // --- Configuration ---
 const { STORAGE_BASE } = require('../config');
@@ -157,14 +156,6 @@ const uploadImage = async (req, res) => {
     // --- Quota OK — update usedStorage ---
     user.usedStorage = parseFloat((user.usedStorage + fileSizeInMB).toFixed(2));
     writeUsers(users);
-
-    // Generate a lightweight preview image for fast gallery loading.
-    // Upload should still succeed even if thumbnail generation fails.
-    try {
-      await ensureThumbnail(username, req.file.filename);
-    } catch (thumbError) {
-      console.warn(`⚠️ Thumbnail generation failed for ${req.file.filename}:`, thumbError.message);
-    }
 
     console.log(`📸 ${username} uploaded: ${req.file.filename} (${fileSizeInMB.toFixed(2)} MB)`);
 
