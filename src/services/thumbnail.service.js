@@ -68,6 +68,8 @@ const deleteUserThumbnailFolder = (username) => {
 
 module.exports = {
   ensureThumbnail,
+  getThumbnailPath,
+  getOriginalPath,
   deleteThumbnail,
   deleteUserThumbnailFolder
 };

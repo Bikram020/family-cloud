@@ -91,8 +91,9 @@ app.use('/files', applyQueryTokenAuth, authenticate, express.static(storagePath)
 
 // --- Thumbnail serving ---
 // GET /thumbs/:username/:filename?token=<jwt>
-// Thumbnails are generated lazily if missing.
-const { ensureThumbnail } = require('./services/thumbnail.service');
+// Serves thumbnail immediately if ready; otherwise serves the original and
+// generates the thumbnail in the background so the next request is fast.
+const { ensureThumbnail, getThumbnailPath, getOriginalPath } = require('./services/thumbnail.service');
 app.get('/thumbs/:username/:filename', applyQueryTokenAuth, authenticate, async (req, res) => {
   try {
     const username = String(req.params.username || '').toLowerCase();
@@ -107,8 +108,23 @@ app.get('/thumbs/:username/:filename', applyQueryTokenAuth, authenticate, async 
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const thumbPath = await ensureThumbnail(username, filename);
-    return res.sendFile(thumbPath);
+    const originalPath = getOriginalPath(username, filename);
+    if (!fs.existsSync(originalPath)) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    const thumbPath = getThumbnailPath(username, filename);
+    if (fs.existsSync(thumbPath)) {
+      // Thumbnail already generated — serve it immediately
+      return res.sendFile(thumbPath);
+    }
+
+    // Thumbnail not ready yet — serve the original NOW so gallery loads instantly,
+    // then generate the thumbnail in the background for the next request.
+    res.sendFile(originalPath);
+    ensureThumbnail(username, filename).catch(e =>
+      console.warn('⚠️ Background thumb gen failed:', e.message)
+    );
   } catch (error) {
     if (error.code === 'ENOENT') {
       return res.status(404).json({ error: 'Image not found' });
