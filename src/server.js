@@ -113,15 +113,29 @@ app.get('/thumbs/:username/:filename', applyQueryTokenAuth, authenticate, async 
       return res.status(404).json({ error: 'Image not found' });
     }
 
+    const sendOriginal = () => {
+      res.sendFile(originalPath, (err) => {
+        if (err && !res.headersSent) {
+          console.error('❌ Original image send error:', err.message);
+          return res.status(err.statusCode || 404).json({ error: 'Image not found' });
+        }
+      });
+    };
+
     const thumbPath = getThumbnailPath(username, filename);
     if (fs.existsSync(thumbPath)) {
-      // Thumbnail already generated — serve it immediately
-      return res.sendFile(thumbPath);
+      // Thumbnail lives under .thumbnails (a dotfolder), so explicitly allow dotfiles.
+      return res.sendFile(thumbPath, { dotfiles: 'allow' }, (err) => {
+        if (err && !res.headersSent) {
+          console.warn('⚠️ Thumbnail send failed, falling back to original:', err.message);
+          sendOriginal();
+        }
+      });
     }
 
     // Thumbnail not ready yet — serve the original NOW so gallery loads instantly,
     // then generate the thumbnail in the background for the next request.
-    res.sendFile(originalPath);
+    sendOriginal();
     ensureThumbnail(username, filename).catch(e =>
       console.warn('⚠️ Background thumb gen failed:', e.message)
     );
