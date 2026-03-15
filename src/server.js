@@ -11,6 +11,20 @@ const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
 
+// Keep visibility on unexpected exits and prevent accidental hangup shutdowns
+// in terminal environments where SIGHUP can be sent after command execution.
+process.on('SIGHUP', () => {
+  console.warn('⚠️ Received SIGHUP, keeping server alive');
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled promise rejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught exception:', error);
+});
+
 // --- Create the Express app ---
 const app = express();
 
@@ -197,7 +211,7 @@ app.get('/', (req, res) => {
 // ============================================
 // START THE SERVER
 // ============================================
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('===========================================');
   console.log('  🌤️  Family Cloud Storage Server');
@@ -208,4 +222,12 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`  💾 Storage:   ${storagePath}`);
   console.log('===========================================');
   console.log('');
+});
+
+server.on('error', (error) => {
+  console.error('❌ Server listen error:', error.message);
+});
+
+server.on('close', () => {
+  console.error('❌ Server closed unexpectedly');
 });
