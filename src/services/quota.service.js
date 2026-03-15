@@ -5,6 +5,52 @@
 const { readUsers, writeUsers } = require('../controllers/auth.controller');
 const { recalculateUsage } = require('./storage.service');
 const { TOTAL_STORAGE_POOL } = require('../config');
+const fs = require('fs');
+
+// --- Read live filesystem free space where uploads are stored ---
+// Uses fs.statfsSync when available and falls back to static config if unavailable.
+const getDeviceFreeSpaceMB = () => {
+  try {
+    if (typeof fs.statfsSync !== 'function') {
+      return null;
+    }
+
+    const stat = fs.statfsSync(process.env.FAMILY_CLOUD_STORAGE_PATH || require('../config').STORAGE_BASE);
+    const freeBytes = Number(stat.bavail || stat.bfree || 0) * Number(stat.bsize || 0);
+    if (!Number.isFinite(freeBytes) || freeBytes < 0) {
+      return null;
+    }
+
+    return parseFloat((freeBytes / (1024 * 1024)).toFixed(2));
+  } catch {
+    return null;
+  }
+};
+
+// --- Build a capacity snapshot used by admin checks + dashboard ---
+const getQuotaCapacitySnapshot = (usersInput = null) => {
+  const users = usersInput || readUsers();
+  const regularUsers = users.filter(u => u.role !== 'admin');
+
+  const totalAllocated = regularUsers.reduce((sum, u) => sum + u.quota, 0);
+  const totalUsed = regularUsers.reduce((sum, u) => sum + u.usedStorage, 0);
+
+  const deviceFreeMB = getDeviceFreeSpaceMB();
+  const totalStoragePool = deviceFreeMB !== null
+    ? parseFloat((deviceFreeMB + totalUsed).toFixed(2))
+    : TOTAL_STORAGE_POOL;
+
+  const unallocated = parseFloat((totalStoragePool - totalAllocated).toFixed(2));
+
+  return {
+    totalAllocated: parseFloat(totalAllocated.toFixed(2)),
+    totalUsed: parseFloat(totalUsed.toFixed(2)),
+    totalStoragePool,
+    unallocated,
+    deviceFreeMB,
+    capacitySource: deviceFreeMB !== null ? 'device-live' : 'config-fallback'
+  };
+};
 
 // --- Check if user has enough quota for a file ---
 const hasEnoughQuota = (username, fileSizeMB) => {
@@ -34,15 +80,15 @@ const getStorageSummary = () => {
         : 0
     }));
 
-  const totalAllocated = users.filter(u => u.role !== 'admin').reduce((sum, u) => sum + u.quota, 0);
-  const totalUsed = users.filter(u => u.role !== 'admin').reduce((sum, u) => sum + u.usedStorage, 0);
-  const unallocated = TOTAL_STORAGE_POOL - totalAllocated;
+  const capacity = getQuotaCapacitySnapshot(users);
 
   return {
-    totalStoragePool: TOTAL_STORAGE_POOL,
-    totalAllocated,
-    totalUsed: parseFloat(totalUsed.toFixed(2)),
-    unallocated: parseFloat(unallocated.toFixed(2)),
+    totalStoragePool: capacity.totalStoragePool,
+    totalAllocated: capacity.totalAllocated,
+    totalUsed: capacity.totalUsed,
+    unallocated: capacity.unallocated,
+    deviceFreeMB: capacity.deviceFreeMB,
+    capacitySource: capacity.capacitySource,
     totalUsers: userStats.length,
     users: userStats
   };
@@ -65,4 +111,4 @@ const syncAllUsage = () => {
   return { synced: changes.length, changes };
 };
 
-module.exports = { hasEnoughQuota, getStorageSummary, syncAllUsage };
+module.exports = { hasEnoughQuota, getStorageSummary, syncAllUsage, getQuotaCapacitySnapshot };

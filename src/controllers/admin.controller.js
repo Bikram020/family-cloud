@@ -5,9 +5,8 @@
 const bcrypt = require('bcryptjs');
 const { readUsers, writeUsers } = require('./auth.controller');
 const { deleteUserFolder, recalculateUsage } = require('../services/storage.service');
-const { getStorageSummary, syncAllUsage } = require('../services/quota.service');
+const { getStorageSummary, syncAllUsage, getQuotaCapacitySnapshot } = require('../services/quota.service');
 const { getUserStorageReport } = require('../services/file.service');
-const { TOTAL_STORAGE_POOL } = require('../config');
 
 // GET /admin/pending-users
 const getPendingUsers = async (req, res) => {
@@ -37,8 +36,7 @@ const approveUser = async (req, res) => {
     if (user.status === 'active') return res.status(400).json({ error: `User "${username}" is already approved` });
 
     // Check unallocated space
-    const totalAllocated = users.filter(u => u.role !== 'admin').reduce((sum, u) => sum + u.quota, 0);
-    const unallocated = TOTAL_STORAGE_POOL - totalAllocated;
+    const { unallocated } = getQuotaCapacitySnapshot(users);
     if (Number(quota) > unallocated) {
       return res.status(400).json({ error: `Not enough unallocated space. Available: ${unallocated} MB, Requested: ${quota} MB` });
     }
@@ -110,8 +108,7 @@ const setQuota = async (req, res) => {
     const newQuota = Number(quota);
     const quotaDiff = newQuota - user.quota;
     if (quotaDiff > 0) {
-      const totalAllocated = users.filter(u => u.role !== 'admin').reduce((sum, u) => sum + u.quota, 0);
-      const unallocated = TOTAL_STORAGE_POOL - totalAllocated;
+      const { unallocated } = getQuotaCapacitySnapshot(users);
       if (quotaDiff > unallocated) {
         return res.status(400).json({ error: `Not enough unallocated space. Available: ${unallocated} MB, Need: ${quotaDiff} MB` });
       }
@@ -169,8 +166,7 @@ const reallocateStorage = async (req, res) => {
         to: { username: to.username, quota: to.quota }
       });
     } else {
-      const totalAllocated = users.filter(u => u.role !== 'admin').reduce((sum, u) => sum + u.quota, 0);
-      const unallocated = TOTAL_STORAGE_POOL - totalAllocated;
+      const { unallocated } = getQuotaCapacitySnapshot(users);
 
       if (amountMB > unallocated) {
         return res.status(400).json({ error: `Not enough unallocated space. Available: ${unallocated} MB` });
@@ -183,7 +179,7 @@ const reallocateStorage = async (req, res) => {
       return res.status(200).json({
         message: `Allocated ${amountMB} MB to ${to.name} from unallocated pool`,
         to: { username: to.username, quota: to.quota },
-        remainingUnallocated: TOTAL_STORAGE_POOL - totalAllocated - amountMB
+        remainingUnallocated: parseFloat((unallocated - amountMB).toFixed(2))
       });
     }
   } catch (error) {

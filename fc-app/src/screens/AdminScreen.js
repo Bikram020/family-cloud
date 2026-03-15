@@ -268,22 +268,23 @@ export default function AdminScreen() {
               <Text style={s.poolTitle}>Storage Pool</Text>
               <View style={s.poolRow}>
                 <View style={s.poolItem}>
-                  <Text style={s.poolValue}>{(allUsers.totalStoragePool / 1000).toFixed(0)} GB</Text>
-                  <Text style={s.poolLabel}>Total</Text>
+                  <Text style={[s.poolValue, { color: '#27ae60' }]}>{((allUsers.deviceFreeMB ?? allUsers.unallocated) / 1000).toFixed(1)} GB</Text>
+                  <Text style={s.poolLabel}>Phone Free</Text>
                 </View>
                 <View style={s.poolItem}>
                   <Text style={[s.poolValue, { color: '#6c5ce7' }]}>{(allUsers.totalAllocated / 1000).toFixed(1)} GB</Text>
                   <Text style={s.poolLabel}>Allocated</Text>
                 </View>
                 <View style={s.poolItem}>
-                  <Text style={[s.poolValue, { color: '#27ae60' }]}>{(allUsers.unallocated / 1000).toFixed(1)} GB</Text>
-                  <Text style={s.poolLabel}>Unallocated</Text>
+                  <Text style={[s.poolValue, { color: '#f39c12' }]}>{(allUsers.unallocated / 1000).toFixed(1)} GB</Text>
+                  <Text style={s.poolLabel}>Quota Free</Text>
                 </View>
                 <View style={s.poolItem}>
                   <Text style={[s.poolValue, { color: '#e74c3c' }]}>{(allUsers.totalUsed / 1000).toFixed(2)} GB</Text>
                   <Text style={s.poolLabel}>Used</Text>
                 </View>
               </View>
+              <Text style={[s.poolLabel, { textAlign: 'center', marginTop: 10 }]}>Live source: {allUsers.capacitySource === 'device-live' ? 'S10 filesystem' : 'fallback config'}</Text>
             </View>
           )}
 
