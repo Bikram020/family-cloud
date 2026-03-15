@@ -1,11 +1,43 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal, Dimensions } from 'react-native';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
+import { View, Text, FlatList, Image, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal, Dimensions, SectionList } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { galleryAPI, SERVER_URL } from '../services/api';
 
 const { width, height } = Dimensions.get('window');
-const PHOTO_SIZE = (width - 48) / 3;
+const GRID_COLUMNS = 4;
+const GRID_GAP = 2;
+const GRID_PADDING = 12;
+const PHOTO_SIZE = (width - (GRID_PADDING * 2) - (GRID_GAP * (GRID_COLUMNS - 1))) / GRID_COLUMNS;
+
+const getDateLabel = (uploadedAt) => {
+  const date = new Date(uploadedAt);
+  if (Number.isNaN(date.getTime())) return 'Unknown Date';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round((today.getTime() - target.getTime()) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+
+  const includeYear = target.getFullYear() !== today.getFullYear();
+  return target.toLocaleDateString('en-GB', includeYear
+    ? { day: 'numeric', month: 'short', year: 'numeric' }
+    : { day: 'numeric', month: 'short' });
+};
+
+const getDateKey = (uploadedAt) => {
+  const date = new Date(uploadedAt);
+  if (Number.isNaN(date.getTime())) return 'unknown-date';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 export default function GalleryScreen() {
   const { token, user } = useAuth();
@@ -22,12 +54,45 @@ export default function GalleryScreen() {
   const loadPhotos = async () => {
     try {
       const data = await galleryAPI.getMyPhotos(token);
-      setPhotos(data.files || []);
+      const sortedFiles = [...(data.files || [])].sort(
+        (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+      );
+      setPhotos(sortedFiles);
       setStorage(data.storage);
     } catch (error) {
       Alert.alert('Gallery Error', error.message || 'Could not load photos');
     } finally { setLoading(false); setRefreshing(false); }
   };
+
+  const photoSections = useMemo(() => {
+    const grouped = [];
+
+    photos.forEach((photo, viewerPhotoIndex) => {
+      const key = getDateKey(photo.uploadedAt);
+      const title = getDateLabel(photo.uploadedAt);
+      const prevGroup = grouped[grouped.length - 1];
+
+      if (!prevGroup || prevGroup.key !== key) {
+        grouped.push({ key, title, photos: [] });
+      }
+
+      grouped[grouped.length - 1].photos.push({ ...photo, viewerPhotoIndex });
+    });
+
+    return grouped.map((group, sectionIndex) => {
+      const rows = [];
+      for (let i = 0; i < group.photos.length; i += GRID_COLUMNS) {
+        rows.push(group.photos.slice(i, i + GRID_COLUMNS));
+      }
+
+      return {
+        key: group.key,
+        title: group.title,
+        isFirst: sectionIndex === 0,
+        data: rows
+      };
+    });
+  }, [photos]);
 
   const openViewer = (index) => {
     setViewerIndex(index);
@@ -74,10 +139,19 @@ export default function GalleryScreen() {
     ? `${SERVER_URL}${photo.thumbnailUrl}?token=${token}`
     : getImageUrl(photo);
 
-  const renderPhoto = ({ item, index }) => (
-    <TouchableOpacity style={s.photoCard} onPress={() => openViewer(index)} activeOpacity={0.8}>
-      <Image source={{ uri: getThumbUrl(item) }} style={s.photoImage} resizeMode="cover" />
-    </TouchableOpacity>
+  const renderPhotoRow = ({ item: row }) => (
+    <View style={s.photoRow}>
+      {row.map((photo, idx) => (
+        <TouchableOpacity
+          key={photo.filename}
+          style={[s.photoCard, idx < row.length - 1 && s.photoCardGap]}
+          onPress={() => openViewer(photo.viewerPhotoIndex)}
+          activeOpacity={0.8}
+        >
+          <Image source={{ uri: getThumbUrl(photo) }} style={s.photoImage} resizeMode="cover" />
+        </TouchableOpacity>
+      ))}
+    </View>
   );
 
   const renderViewerItem = ({ item }) => (
@@ -111,8 +185,17 @@ export default function GalleryScreen() {
           <Text style={s.emptyText}>Upload your first photo using the Upload tab!</Text>
         </View>
       ) : (
-        <FlatList data={photos} renderItem={renderPhoto} keyExtractor={(item) => item.filename} numColumns={3} contentContainerStyle={s.grid}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadPhotos(); }} tintColor="#6c5ce7" />} />
+        <SectionList
+          sections={photoSections}
+          renderItem={renderPhotoRow}
+          keyExtractor={(row, rowIndex) => `${row[0]?.filename || 'row'}-${rowIndex}`}
+          renderSectionHeader={({ section }) => (
+            <Text style={[s.sectionTitle, !section.isFirst && s.sectionTitleSpaced]}>{section.title}</Text>
+          )}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={s.grid}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadPhotos(); }} tintColor="#6c5ce7" />}
+        />
       )}
 
       {/* Full-screen swipeable photo viewer */}
@@ -154,8 +237,12 @@ const s = StyleSheet.create({
   photoCount: { color: '#6c5ce7', fontSize: 13, fontWeight: '600' },
   track: { height: 4, backgroundColor: '#1a1a2e', borderRadius: 2 },
   fill: { height: 4, backgroundColor: '#6c5ce7', borderRadius: 2 },
-  grid: { padding: 12 },
-  photoCard: { width: PHOTO_SIZE, height: PHOTO_SIZE, margin: 4, borderRadius: 8, overflow: 'hidden', backgroundColor: '#1a1a2e' },
+  grid: { paddingHorizontal: GRID_PADDING, paddingTop: 10, paddingBottom: 20 },
+  sectionTitle: { color: '#fff', fontSize: 28, fontWeight: '700', marginBottom: 10 },
+  sectionTitleSpaced: { marginTop: 18 },
+  photoRow: { flexDirection: 'row', marginBottom: GRID_GAP },
+  photoCard: { width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: 2, overflow: 'hidden', backgroundColor: '#1a1a2e' },
+  photoCardGap: { marginRight: GRID_GAP },
   photoImage: { width: '100%', height: '100%' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
