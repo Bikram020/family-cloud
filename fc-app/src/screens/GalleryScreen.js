@@ -36,13 +36,32 @@ export default function GalleryScreen() {
 
   const handleDelete = () => {
     const photo = photos[viewerIndex];
+    const deleteIndex = viewerIndex;
     Alert.alert('Delete Photo', 'Delete this photo from the cloud?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
           try {
             await galleryAPI.deletePhoto(token, photo.filename);
-            setViewerVisible(false);
+            setPhotos((prev) => {
+              const updated = prev.filter((item) => item.filename !== photo.filename);
+
+              if (updated.length === 0) {
+                setViewerVisible(false);
+                setViewerIndex(0);
+                return updated;
+              }
+
+              const nextIndex = Math.min(deleteIndex, updated.length - 1);
+              setViewerIndex(nextIndex);
+              requestAnimationFrame(() => {
+                flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+              });
+
+              return updated;
+            });
+
+            // Refresh stats in background while keeping viewer state smooth.
             loadPhotos();
           } catch (error) { Alert.alert('Error', error.message); }
         }

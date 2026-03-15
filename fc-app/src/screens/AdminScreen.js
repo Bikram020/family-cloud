@@ -79,13 +79,31 @@ export default function AdminScreen() {
   };
 
   const handleDeleteFile = (filename) => {
+    const deleteIndex = viewerIndex;
     Alert.alert('Delete Photo', 'Delete this photo?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
           try {
             await adminAPI.deleteUserFile(token, selectedUser.username, filename);
-            setViewerVisible(false);
+            setUserFiles((prev) => {
+              const updated = prev.filter((item) => item.filename !== filename);
+
+              if (updated.length === 0) {
+                setViewerVisible(false);
+                setViewerIndex(0);
+                return updated;
+              }
+
+              const nextIndex = Math.min(deleteIndex, updated.length - 1);
+              setViewerIndex(nextIndex);
+              requestAnimationFrame(() => {
+                viewerRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+              });
+
+              return updated;
+            });
+
             openUserDetail(selectedUser);
             loadData();
           } catch (e) { Alert.alert('Error', e.message); }
