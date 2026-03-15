@@ -6,6 +6,7 @@ export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
@@ -26,7 +27,19 @@ export default function LoginScreen({ navigation }) {
         <Text style={s.subtitle}>Your private photo cloud</Text>
         <View style={s.form}>
           <TextInput style={s.input} placeholder="Mobile Number" placeholderTextColor="#888" keyboardType="phone-pad" value={mobile} onChangeText={setMobile} maxLength={10} />
-          <TextInput style={s.input} placeholder="Password" placeholderTextColor="#888" secureTextEntry value={password} onChangeText={setPassword} />
+          <View style={s.passwordWrap}>
+            <TextInput
+              style={s.inputWithToggle}
+              placeholder="Password"
+              placeholderTextColor="#888"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TouchableOpacity onPress={() => setShowPassword((v) => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={s.toggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity style={[s.btn, loading && s.btnOff]} onPress={handleLogin} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Log In</Text>}
           </TouchableOpacity>
@@ -47,6 +60,9 @@ const s = StyleSheet.create({
   subtitle: { fontSize: 16, color: '#888', marginBottom: 40 },
   form: { width: '100%', marginBottom: 24 },
   input: { backgroundColor: '#1a1a2e', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#fff', marginBottom: 12, borderWidth: 1, borderColor: '#2a2a3e' },
+  passwordWrap: { backgroundColor: '#1a1a2e', borderRadius: 12, paddingHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#2a2a3e', flexDirection: 'row', alignItems: 'center' },
+  inputWithToggle: { flex: 1, paddingVertical: 14, fontSize: 16, color: '#fff' },
+  toggleText: { color: '#6c5ce7', fontSize: 13, fontWeight: '600' },
   btn: { backgroundColor: '#6c5ce7', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   btnOff: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 18, fontWeight: '600' },
