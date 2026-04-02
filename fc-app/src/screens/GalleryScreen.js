@@ -7,7 +7,6 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
 import { useAuth } from '../context/AuthContext';
 import { galleryAPI, SERVER_URL } from '../services/api';
 
@@ -173,39 +172,39 @@ export default function GalleryScreen() {
     if (!photo) return;
     try {
       setActionLoading(true);
-
-      // Download image to temp
       const localUri = await downloadToTemp(photo);
+      const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
 
-      // Request media library permission
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        // Fallback: open share sheet so user can save manually
-        await Sharing.shareAsync(localUri, { mimeType: 'image/jpeg', dialogTitle: 'Save Photo' });
-        return;
+      // Try to use saved folder first
+      const SecureStore = require('expo-secure-store');
+      let dirUri = await SecureStore.getItemAsync('fc_save_folder');
+
+      const saveToDir = async (uri) => {
+        const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(uri, photo.filename, 'image/jpeg');
+        await FileSystem.writeAsStringAsync(newFileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+        Alert.alert('Saved!', 'Photo saved to your download folder');
+      };
+
+      if (dirUri) {
+        try {
+          await saveToDir(dirUri);
+          return;
+        } catch (e) {
+          // Saved folder no longer valid, ask again
+          console.log('Saved folder expired, asking again');
+        }
       }
 
-      // Save to gallery → creates an asset
-      const asset = await MediaLibrary.createAssetAsync(localUri);
+      // No saved folder or it expired — ask user to pick
+      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (!permissions.granted) { setActionLoading(false); return; }
 
-      // Move it into "Family Cloud" album (auto-created if it doesn't exist)
-      const album = await MediaLibrary.getAlbumAsync('Family Cloud');
-      if (album) {
-        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-      } else {
-        await MediaLibrary.createAlbumAsync('Family Cloud', asset, false);
-      }
-
-      Alert.alert('Saved! ✓', 'Photo saved to Family Cloud album in your gallery');
+      // Save this folder for future downloads
+      await SecureStore.setItemAsync('fc_save_folder', permissions.directoryUri);
+      await saveToDir(permissions.directoryUri);
     } catch (e) {
       console.log('Save error:', e);
-      // If MediaLibrary fails (Expo Go limitation), fall back to share sheet
-      try {
-        const localUri = await downloadToTemp(photos[currentIndex]);
-        await Sharing.shareAsync(localUri, { mimeType: 'image/jpeg', dialogTitle: 'Save Photo' });
-      } catch (e2) {
-        Alert.alert('Save Error', e.message || 'Could not save this photo');
-      }
+      Alert.alert('Save Error', e.message || 'Could not save this photo');
     } finally { setActionLoading(false); }
   };
 
