@@ -5,9 +5,8 @@ import {
   Animated, StatusBar, SectionList, BackHandler
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
 import { useAuth } from '../context/AuthContext';
 import { galleryAPI, SERVER_URL } from '../services/api';
 
@@ -74,6 +73,7 @@ export default function GalleryScreen() {
     const ext = photo.filename.split('.').pop() || 'jpg';
     const localUri = FileSystem.cacheDirectory + `fc_${Date.now()}.${ext}`;
     const result = await FileSystem.downloadAsync(getImageUrl(photo), localUri);
+    if (!result || !result.uri) throw new Error('Download failed');
     return result.uri;
   };
 
@@ -162,7 +162,8 @@ export default function GalleryScreen() {
       const localUri = await downloadToTemp(photo);
       await Sharing.shareAsync(localUri, { mimeType: 'image/jpeg', dialogTitle: 'Share Photo' });
     } catch (e) {
-      Alert.alert('Share Error', 'Could not share this photo');
+      console.log('Share error:', e);
+      Alert.alert('Share Error', e.message || 'Could not share this photo');
     } finally { setActionLoading(false); }
   };
 
@@ -171,16 +172,16 @@ export default function GalleryScreen() {
     if (!photo) return;
     try {
       setActionLoading(true);
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Allow access to save photos');
-        return;
-      }
       const localUri = await downloadToTemp(photo);
-      await MediaLibrary.saveToLibraryAsync(localUri);
-      Alert.alert('Saved!', 'Photo saved to your gallery');
+      // In Expo Go, we can't save directly to gallery.
+      // Open share sheet so user can save from there.
+      await Sharing.shareAsync(localUri, {
+        mimeType: 'image/jpeg',
+        dialogTitle: 'Save Photo — tap "Save Image" or choose an app',
+      });
     } catch (e) {
-      Alert.alert('Download Error', 'Could not save this photo');
+      console.log('Save error:', e);
+      Alert.alert('Save Error', e.message || 'Could not save this photo');
     } finally { setActionLoading(false); }
   };
 
