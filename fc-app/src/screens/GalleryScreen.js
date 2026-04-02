@@ -172,13 +172,27 @@ export default function GalleryScreen() {
     if (!photo) return;
     try {
       setActionLoading(true);
+      // Download image to temp
       const localUri = await downloadToTemp(photo);
-      // In Expo Go, we can't save directly to gallery.
-      // Open share sheet so user can save from there.
-      await Sharing.shareAsync(localUri, {
-        mimeType: 'image/jpeg',
-        dialogTitle: 'Save Photo — tap "Save Image" or choose an app',
-      });
+
+      // Ask user to pick a save folder (Downloads, Pictures, etc.)
+      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (!permissions.granted) { setActionLoading(false); return; }
+
+      // Read the temp file as base64
+      const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
+
+      // Create file in the chosen folder
+      const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+        permissions.directoryUri,
+        photo.filename,
+        'image/jpeg'
+      );
+
+      // Write the image data
+      await FileSystem.writeAsStringAsync(newFileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+
+      Alert.alert('Saved!', `Photo saved to your selected folder`);
     } catch (e) {
       console.log('Save error:', e);
       Alert.alert('Save Error', e.message || 'Could not save this photo');
