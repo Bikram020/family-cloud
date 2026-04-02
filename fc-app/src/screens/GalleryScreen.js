@@ -7,7 +7,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import * as SecureStore from 'expo-secure-store';
+import * as MediaLibrary from 'expo-media-library';
 import { useAuth } from '../context/AuthContext';
 import { galleryAPI, SERVER_URL } from '../services/api';
 
@@ -177,42 +177,33 @@ export default function GalleryScreen() {
       // Download image to temp
       const localUri = await downloadToTemp(photo);
 
-      // Check if we have a saved folder URI
-      let dirUri = await SecureStore.getItemAsync('fc_save_folder');
-
-      if (!dirUri) {
-        // First time — ask user to pick/create folder
-        Alert.alert(
-          'Setup Save Folder',
-          'Navigate to Pictures, create a folder called "Family Cloud", then select it. You only need to do this once.',
-          [{ text: 'OK' }]
-        );
-        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (!permissions.granted) { setActionLoading(false); return; }
-        dirUri = permissions.directoryUri;
-        // Save it for future use
-        await SecureStore.setItemAsync('fc_save_folder', dirUri);
+      // Request media library permission
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        // Fallback: open share sheet so user can save manually
+        await Sharing.shareAsync(localUri, { mimeType: 'image/jpeg', dialogTitle: 'Save Photo' });
+        return;
       }
 
-      // Read temp file as base64
-      const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
+      // Save to gallery → creates an asset
+      const asset = await MediaLibrary.createAssetAsync(localUri);
 
-      // Create and write file in saved folder
-      const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-        dirUri,
-        photo.filename,
-        'image/jpeg'
-      );
-      await FileSystem.writeAsStringAsync(newFileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      // Move it into "Family Cloud" album (auto-created if it doesn't exist)
+      const album = await MediaLibrary.getAlbumAsync('Family Cloud');
+      if (album) {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      } else {
+        await MediaLibrary.createAlbumAsync('Family Cloud', asset, false);
+      }
 
-      Alert.alert('Saved! ✓', 'Photo saved to Family Cloud folder');
+      Alert.alert('Saved! ✓', 'Photo saved to Family Cloud album in your gallery');
     } catch (e) {
       console.log('Save error:', e);
-      // If saved folder permission expired, clear it and retry
-      if (e.message && e.message.includes('permission')) {
-        await SecureStore.deleteItemAsync('fc_save_folder');
-        Alert.alert('Folder access expired', 'Please try saving again to re-select the folder');
-      } else {
+      // If MediaLibrary fails (Expo Go limitation), fall back to share sheet
+      try {
+        const localUri = await downloadToTemp(photos[currentIndex]);
+        await Sharing.shareAsync(localUri, { mimeType: 'image/jpeg', dialogTitle: 'Save Photo' });
+      } catch (e2) {
         Alert.alert('Save Error', e.message || 'Could not save this photo');
       }
     } finally { setActionLoading(false); }
