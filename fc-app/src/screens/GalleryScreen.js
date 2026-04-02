@@ -2,9 +2,12 @@ import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, Image, TouchableOpacity, TouchableWithoutFeedback,
   StyleSheet, Alert, ActivityIndicator, RefreshControl, Modal, Dimensions,
-  Animated, StatusBar, Share, SectionList, BackHandler
+  Animated, StatusBar, SectionList, BackHandler
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 import { useAuth } from '../context/AuthContext';
 import { galleryAPI, SERVER_URL } from '../services/api';
 
@@ -33,19 +36,19 @@ export default function GalleryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Viewer state
+  // Viewer
   const [viewerVisible, setViewerVisible] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [zoomed, setZoomed] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  const viewerRef = useRef(null);
+  const zoomAnim = useRef(new Animated.Value(1)).current;
   const lastTap = useRef(0);
 
   useFocusEffect(useCallback(() => { loadPhotos(); }, []));
 
-  // Back button handler
   useFocusEffect(useCallback(() => {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
       if (viewerVisible) { closeViewer(); return true; }
@@ -66,21 +69,31 @@ export default function GalleryScreen() {
 
   const getImageUrl = (photo) => `${SERVER_URL}/files/${user.username}/${photo.filename}?token=${token}`;
 
-  // ====== Viewer controls ======
+  // Download image to a temp file and return its local URI
+  const downloadToTemp = async (photo) => {
+    const ext = photo.filename.split('.').pop() || 'jpg';
+    const localUri = FileSystem.cacheDirectory + `fc_${Date.now()}.${ext}`;
+    const result = await FileSystem.downloadAsync(getImageUrl(photo), localUri);
+    return result.uri;
+  };
+
+  // ====== Viewer ======
   const openViewer = (filename) => {
     const idx = photos.findIndex(p => p.filename === filename);
     if (idx >= 0) {
       setCurrentIndex(idx);
       setControlsVisible(true);
-      setZoomed(false);
+      setIsZoomed(false);
       fadeAnim.setValue(1);
+      zoomAnim.setValue(1);
       setViewerVisible(true);
     }
   };
 
   const closeViewer = () => {
     setViewerVisible(false);
-    setZoomed(false);
+    setIsZoomed(false);
+    zoomAnim.setValue(1);
   };
 
   const toggleControls = () => {
@@ -92,11 +105,18 @@ export default function GalleryScreen() {
   const handleDoubleTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 300) {
-      setZoomed(!zoomed);
+      // Double tap — smooth zoom toggle
+      const toZoom = !isZoomed;
+      setIsZoomed(toZoom);
+      Animated.spring(zoomAnim, {
+        toValue: toZoom ? 3 : 1,
+        friction: 5,
+        tension: 80,
+        useNativeDriver: true,
+      }).start();
       lastTap.current = 0;
     } else {
       lastTap.current = now;
-      // Single tap after delay
       setTimeout(() => {
         if (lastTap.current !== 0) {
           toggleControls();
@@ -109,12 +129,15 @@ export default function GalleryScreen() {
   const onViewableChanged = useRef(({ viewableItems }) => {
     if (viewableItems.length > 0) {
       setCurrentIndex(viewableItems[0].index);
-      setZoomed(false); // Reset zoom when changing photo
+      // Reset zoom when switching photos
+      setIsZoomed(false);
+      zoomAnim.setValue(1);
     }
   }).current;
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
+  // ====== Actions ======
   const handleDelete = () => {
     const photo = photos[currentIndex];
     Alert.alert('Delete Photo', 'Delete this photo?', [
@@ -132,10 +155,36 @@ export default function GalleryScreen() {
   };
 
   const handleShare = async () => {
-    try { await Share.share({ message: photos[currentIndex]?.filename }); } catch (e) {}
+    const photo = photos[currentIndex];
+    if (!photo) return;
+    try {
+      setActionLoading(true);
+      const localUri = await downloadToTemp(photo);
+      await Sharing.shareAsync(localUri, { mimeType: 'image/jpeg', dialogTitle: 'Share Photo' });
+    } catch (e) {
+      Alert.alert('Share Error', 'Could not share this photo');
+    } finally { setActionLoading(false); }
   };
 
-  // ====== Gallery grid rendering ======
+  const handleDownload = async () => {
+    const photo = photos[currentIndex];
+    if (!photo) return;
+    try {
+      setActionLoading(true);
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Allow access to save photos');
+        return;
+      }
+      const localUri = await downloadToTemp(photo);
+      await MediaLibrary.saveToLibraryAsync(localUri);
+      Alert.alert('Saved!', 'Photo saved to your gallery');
+    } catch (e) {
+      Alert.alert('Download Error', 'Could not save this photo');
+    } finally { setActionLoading(false); }
+  };
+
+  // ====== Rendering ======
   const sections = groupByDate(photos);
   const currentPhoto = photos[currentIndex];
 
@@ -150,14 +199,13 @@ export default function GalleryScreen() {
     </View>
   );
 
-  // ====== Viewer image slide ======
   const renderViewerImage = ({ item }) => (
     <TouchableWithoutFeedback onPress={handleDoubleTap}>
       <View style={s.slide}>
-        <Image
+        <Animated.Image
           source={{ uri: getImageUrl(item) }}
-          style={[s.slideImg, zoomed && s.slideImgZoomed]}
-          resizeMode={zoomed ? 'cover' : 'contain'}
+          style={[s.slideImg, { transform: [{ scale: zoomAnim }] }]}
+          resizeMode="contain"
         />
       </View>
     </TouchableWithoutFeedback>
@@ -204,14 +252,12 @@ export default function GalleryScreen() {
         />
       )}
 
-      {/* ======== VIEWER MODAL ======== */}
+      {/* ======== VIEWER ======== */}
       <Modal visible={viewerVisible} animationType="slide" statusBarTranslucent onRequestClose={closeViewer}>
         <View style={s.viewer}>
           <StatusBar hidden />
 
-          {/* Horizontal swipeable image list */}
           <FlatList
-            ref={viewerRef}
             data={photos}
             renderItem={renderViewerImage}
             keyExtractor={item => item.filename}
@@ -222,8 +268,16 @@ export default function GalleryScreen() {
             getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
             onViewableItemsChanged={onViewableChanged}
             viewabilityConfig={viewabilityConfig}
-            removeClippedSubviews={true}
+            removeClippedSubviews
           />
+
+          {/* Loading overlay for share/download */}
+          {actionLoading && (
+            <View style={s.loadingOverlay}>
+              <ActivityIndicator size="large" color="#6c5ce7" />
+              <Text style={s.loadingText}>Processing...</Text>
+            </View>
+          )}
 
           {/* Top bar */}
           <Animated.View style={[s.topBar, { opacity: fadeAnim }]} pointerEvents={controlsVisible ? 'auto' : 'none'}>
@@ -242,13 +296,13 @@ export default function GalleryScreen() {
                 : ''}
             </Text>
             <View style={s.bottomActions}>
+              <TouchableOpacity style={s.aBtn} onPress={handleDownload}>
+                <Text style={s.aIcon}>⬇</Text>
+                <Text style={s.aLabel}>Save</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={s.aBtn} onPress={handleShare}>
                 <Text style={s.aIcon}>⤴</Text>
                 <Text style={s.aLabel}>Share</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.aBtn}>
-                <Text style={s.aIcon}>✎</Text>
-                <Text style={s.aLabel}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.aBtn} onPress={handleDelete}>
                 <Text style={s.aIcon}>🗑</Text>
@@ -290,8 +344,10 @@ const s = StyleSheet.create({
   // Viewer
   viewer: { flex: 1, backgroundColor: '#000' },
   slide: { width, height, justifyContent: 'center', alignItems: 'center' },
-  slideImg: { width, height: height * 0.75 },
-  slideImgZoomed: { width, height },
+  slideImg: { width, height: height * 0.8 },
+
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 20 },
+  loadingText: { color: '#fff', marginTop: 10, fontSize: 14 },
 
   topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 44, paddingHorizontal: 12, paddingBottom: 10, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10 },
   topBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
@@ -301,7 +357,7 @@ const s = StyleSheet.create({
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingTop: 10, paddingBottom: 28, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 10 },
   bottomDate: { color: '#ccc', fontSize: 12, marginBottom: 14 },
   bottomActions: { flexDirection: 'row', justifyContent: 'space-around', width: '65%' },
-  aBtn: { alignItems: 'center', paddingVertical: 4, paddingHorizontal: 12 },
+  aBtn: { alignItems: 'center', paddingVertical: 4, paddingHorizontal: 16 },
   aIcon: { fontSize: 20, color: '#fff', marginBottom: 3 },
   aLabel: { color: '#aaa', fontSize: 10 },
 });
