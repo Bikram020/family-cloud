@@ -48,16 +48,22 @@ const getUserFiles = (username) => {
       const filePath = path.join(userFolder, filename);
       const stat = fs.statSync(filePath);
 
+      // Skip directories (e.g. future album subfolders, .thumbnails siblings)
+      if (stat.isDirectory()) return null;
+
       return {
         filename: filename,
         size: `${(stat.size / (1024 * 1024)).toFixed(2)} MB`,
         sizeBytes: stat.size,
-        uploadedAt: stat.birthtime.toISOString(),
+        // NOTE: On Linux/Termux, birthtime is unsupported and always returns 1970.
+        // Use mtime (last modified) which is correctly tracked on all platforms.
+        uploadedAt: stat.mtime.toISOString(),
         // URL that the frontend can use to display the image
         url: `/files/${username}/${filename}`,
         thumbnailUrl: `/thumbs/${username}/${filename}`
       };
     })
+    .filter(Boolean) // remove nulls from skipped directories
     .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)); // newest first
 };
 

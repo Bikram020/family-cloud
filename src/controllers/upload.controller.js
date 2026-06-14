@@ -13,6 +13,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');  // Built into Node.js — no extra package needed
+const { exec } = require('child_process');  // For triggering Android media scanner
 const { readUsers, writeUsers } = require('./auth.controller');
 
 // --- Configuration ---
@@ -22,6 +23,34 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB in bytes
 // Allowed file types
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+
+// ============================================
+// MEDIA SCANNER — Notify Android about new file
+// ============================================
+// When the server saves a file to shared storage, Android's
+// Gallery app won't see it until the media scanner runs.
+// This fires a broadcast in the background so the photo
+// appears in Samsung Gallery immediately after upload.
+// Only runs on Termux (Android); silently skipped on Windows/Mac.
+const triggerMediaScan = (termuxFilePath) => {
+  const isTermux = process.env.TERMUX_VERSION || process.platform === 'android';
+  if (!isTermux) return; // Not on Android — skip
+
+  // Termux internal path: /data/data/com.termux/files/home/storage/shared/...
+  // Android public path:  /storage/emulated/0/...
+  const androidPath = termuxFilePath.replace(
+    '/data/data/com.termux/files/home/storage/shared',
+    '/storage/emulated/0'
+  );
+
+  exec(
+    `am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://${androidPath}"`,
+    (err) => {
+      if (err) console.warn('⚠️  Media scan trigger failed:', err.message);
+      else console.log('🔍 Media scan triggered:', androidPath);
+    }
+  );
+};
 
 // ============================================
 // MULTER CONFIGURATION
@@ -156,6 +185,9 @@ const uploadImage = async (req, res) => {
     // --- Quota OK — update usedStorage ---
     user.usedStorage = parseFloat((user.usedStorage + fileSizeInMB).toFixed(2));
     writeUsers(users);
+
+    // --- Notify Android media scanner (fire-and-forget) ---
+    triggerMediaScan(req.file.path);
 
     console.log(`📸 ${username} uploaded: ${req.file.filename} (${fileSizeInMB.toFixed(2)} MB)`);
 
